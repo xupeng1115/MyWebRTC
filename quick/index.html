@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>WebRTC</title>
+    <link href="assets/css/gvc-pc.css" rel="stylesheet" >
+    <script>
+        (function() {
+            if (location.hostname.indexOf('sxb.qcloud.com') === -1) return;
+            var param = window.location.search + window.location.hash;
+            if ((navigator.userAgent.match(/iPhone/i)) || (navigator.userAgent.match(/iPod/i)) || (navigator.userAgent.match(/android/gi)) || (navigator.userAgent.match(/Windows Phone/i))) {
+                location.replace("mobile.html" + param);
+            }
+        })();
+    </script>
+    <!--<link href="http://10.100.65.223/open_proj/proj_qcloud_v2/mc_2014/video/demo/group-video-calling/css/gvc-pc.css" rel="stylesheet" >-->
+    <script src="assets/libs/vue.js"></script>
+</head>
+<body>
+
+<div id="app-main">
+
+<div v-if="view == 0" class="login-wrapper">
+    <div id="login-container" class="row mode login" >
+        <div class="login-wrap">
+            <div class="logo"></div>
+            <div class="login-typing">
+                <input type="text" class="mobile" placeholder="输入用户名" v-model="form.username" >
+                <input type="password" class="mobile" placeholder="输入用户密码"  v-model="form.password" >
+            </div>
+            <div class="btns-wrap">
+                <button class="btn-login" v-on:click="login">登录</button>
+                <button class="btn-register" v-on:click="register">注册并登录</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- 頂部導航 Start -->
+  <div v-if="view > 0" class="header">
+      <div class="product-wrap">
+          <span class="product-name">Web双向音视频</span>
+        <span class="resolution-label">角色：</span>
+        <select name="resolution" id="resolution"  class="resolution" v-model="configRole">
+            <option value="">自动（根据机型能力自动计算）</option>
+            <option v-for="item in SpearConfig" :value="item.role">
+                {{item.role}} ({{ item.video.format_fix_width}}x{{ item.video.format_fix_height}} , {{ item.video.fps}}帧 {{item.video.minkbps}} - {{item.video.maxkbps}} kbps )
+            </option>
+        </select>
+        <!--<span class="resolution-label">分辨率：</span>
+        <select name="resolution" id="resolution"  class="resolution" v-model="resolution">
+            <option value="auto">自动</option>
+            <option value="1280x720">超清(1280x720)</option>
+            <option value="640x360">高清(640x360)</option>
+            <option value="480x264">标清(480*264)</option>
+            <option value="320x180">普清(320*180)</option>
+        </select>
+        <span class="resolution-label">帧率：</span>
+        <select name="frameRate" id="frameRate"  class="resolution"  v-model="frameRate">
+            <option value="auto">自动</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+        </select>-->
+      </div>
+      <div v-if="loginInfo && loginInfo.identifier" class="user-wrap">
+          <ul class="nav-user">
+              <li>
+                  <a class="text-only">{{ loginInfo.identifier }}</a>
+              </li>
+              <li>
+                  <a href="javascript:;" v-on:click="logout">退出</a>
+              </li>
+          </ul>
+      </div>
+  </div>
+  <!-- 頂部導航  End  -->
+
+    <!-- 內容區塊 Start -->
+<div v-if="createRoomModal"  class="container modal">
+    <div class="overlay" ></div>
+    <div class="gvc-dialog" role="alertdialog" >
+        <div class="gvc-dialog-hd">
+            <strong>创建房间</strong>
+            <button title="关闭" class="gvc-btn-close"  v-on:click="hideCreateRoom">关闭</button>
+        </div>
+        <div class="gvc-dialog-bd">
+            <div class="creating-wrap">
+                <span>房间名称</span>
+                <input type="text" class="gvc-input-text" placeholder="请输入房间名称" v-model="modalForm.roomname" value="" autofocus="">
+            </div>
+        </div>
+        <div class="gvc-dialog-ft-btn-wrap">
+            <button class="gvc-btn confirm" v-on:click="createRoom">确定</button>
+            <button class="gvc-btn" v-on:click="hideCreateRoom">取消</button>
+        </div>
+    </div>
+</div>
+
+
+    <!-- 內容區塊 Start -->
+<div v-if="joinRoomModal"  class="container modal">
+    <div class="overlay" ></div>
+    <div class="gvc-dialog" role="alertdialog" >
+        <div class="gvc-dialog-hd">
+            <strong>加入房间</strong>
+            <button title="关闭" class="gvc-btn-close"  v-on:click="hideCreateRoom">关闭</button>
+        </div>
+        <div class="gvc-dialog-bd">
+            <div class="creating-wrap">
+                <span>房间id</span>
+                <input type="text" class="gvc-input-text" placeholder="请输入房间id" v-model="modalForm.roomnum" value="" autofocus="">
+            </div>
+        </div>
+        <div class="gvc-dialog-ft-btn-wrap">
+            <button class="gvc-btn confirm" v-on:click="joinSpecificRoom">确定</button>
+            <button class="gvc-btn" v-on:click="hideJoinRoom">取消</button>
+        </div>
+    </div>
+</div>
+<!-- 內容區塊  End  -->
+    <!-- 內容區塊 Start -->
+<div v-if="view == 1"  class="container">
+    <!-- 房間列表 Start -->
+    <div class="rooms-wrap">
+        <p class="rooms-title">直播中房间
+            <a href="javascript:;" v-on:click="showJoinRoom" class="connected fr">加入房间</a>
+            <a href="javascript:;" v-on:click="showCreateRoom" class="connected fr">创建房间</a>
+            </p>
+        <ul class="rooms-list">
+            <li v-for="item in roomList" class="room-item" :data-roomnum="item.info.roomnum"  v-on:click="joinRoom">
+                <p class="room-id">
+                    <span class="label-txt">房间id:</span>
+                    <span class="value-txt">{{ item.info && item.info.roomnum }}</span>
+                </p>
+                <p class="room-id">
+                    <span class="label-txt">房间名:</span>
+                    <span class="value-txt">{{ item.info && item.info.title }}</span>
+                </p>
+                <p class="user-name">
+                    <span class="label-txt">用户名:</span>
+                    <span class="value-txt">{{ item.uid }}</span>
+                </p>
+            </li>
+        </ul>
+    </div>
+    <!-- 房間列表  End  -->
+</div>
+<!-- 內容區塊  End  -->
+
+
+<!-- 內容區塊 Start -->
+<div v-if="view == 2"  class="container">
+    <!-- 左側導覽列 Start -->
+    <div class="sidebar">
+        <h2>用户列表</h2>
+        <div class="sidebar-list-wrap">
+            <ul class="sidebar-list">
+                <li v-for="item in userList" >
+                    <div class="item-info">
+                        <p class="room-id">
+                            <!--<span class="label-txt">ID:</span>-->
+                            <span class="value-txt">{{ item.id }}</span>
+                        </p>
+                        <!--<p class="user-name">
+                            <span class="label-txt">USER:</span>
+                            <span class="value-txt">user0001</span>
+                        </p>-->
+                    </div>
+                    <div v-if="item.role == 2" class="item-status connected">连麦中</div>
+                    <div v-else-if="item.role == 1" class="item-status connected">连麦中</div>
+                    <div v-else class="item-status connected"></div>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <!-- 左側導覽列  End  -->
+
+    <!-- 視訊通話區域 Start -->
+    <div class="main-area">
+        <!-- 主區域 Start -->
+        <div class="panel">
+            <div class="action-panel">
+                <div class="left-panel">
+                    <i></i>
+                    <a href="javascript:;" v-on:click="quitRoom"><span>返回房间列表</span></a> <span>&nbsp;&nbsp;&nbsp;&nbsp;&gt; roomid : {{ roomnum }}</span>
+                </div>
+                <div class="right-panel" style="width: 280px;">
+                    <i :class="mode=='fluid' && 'fluid-layout current' || 'fluid-layout'" @click="chanceMode('fluid')"></i>
+                    <i :class="mode=='fixed' && 'fixed-layout current' || 'fixed-layout'" @click="chanceMode('fixed')"></i>
+                    <!-- 依照不同狀態自行使用 -->
+                    <button v-if="role !== 'LiveMaster' && !onMic" type="button" :class="applying >0 ? 'calling-btn disabled' : 'calling-btn'" @click="applyPushStream">申请连麦 {{ applying>0 ? '('+applying+'秒)' : ""}}</button>
+                    <button v-if="role !== 'LiveMaster' && onMic" type="button" class="calling-btn disabled">申请连麦</button>
+                    <button v-if="role === 'LiveMaster'"  class="calling-btn decline" @click="quitRoom">关闭房间</button>
+                    <button v-else type="button" class="calling-btn decline" @click="quitRoom">退出房间</button>
+                </div>
+            </div>
+            <div class="video-panel">
+                <div class="tips-wrapper">
+                    <div v-for="item in apply_list" class="tips" style="margin-top: 10px;">
+                        <span>用户 {{ item.who }}  申请连麦</span>
+                        <button type="button" class="accept-btn" :data-id="item.who"  @click="applyAgree">同意</button>
+                        <button type="button" class="decline-btn" :data-id="item.who" @click="applyReject" >拒绝</button>
+                    </div>
+                </div>
+                <div :class="mode == 'fixed' ? 'video-container p9 fixed' : 'video-container fluid'">
+                <!--<div :class="'video-container p'+video_list.length">-->
+                    <div v-for="item in video_list" :class="item.first ? 'flex-item first' : 'flex-item'" @click="unshiftThis" :data-id="item.videoId">
+                        <video v-if="item.videoId == 'local'" muted :id="item.videoId" class="video-item local-video " autoplay="autoplay" data-videotype="remote" ></video>
+                        <video v-else :id="item.videoId" class="video-item" autoplay="autoplay" data-videotype="remote"></video>
+
+                        <div id="button-container" v-if="item.videoId == 'local'">
+                            <svg @click="toggleCamera" xmlns="http://www.w3.org/2000/svg" viewbox="-10 -10 68 68" :class="open.video?'on':'off'">
+                                <circle cx="24" cy="24" r="34">
+                                    <title>Mute video</title>
+                                </circle>
+                                <path class="off" transform="scale(0.6), translate(17,16)" d="M40 8H15.64l8 8H28v4.36l1.13 1.13L36 16v12.36l7.97 7.97L44 36V12c0-2.21-1.79-4-4-4zM4.55 2L2 4.55l4.01 4.01C4.81 9.24 4 10.52 4 12v24c0 2.21 1.79 4 4 4h29.45l4 4L44 41.46 4.55 2zM12 16h1.45L28 30.55V32H12V16z" fill="white"/>
+                                <path class="on" transform="scale(0.6), translate(17,16)" d="M40 8H8c-2.21 0-4 1.79-4 4v24c0 2.21 1.79 4 4 4h32c2.21 0 4-1.79 4-4V12c0-2.21-1.79-4-4-4zm-4 24l-8-6.4V32H12V16h16v6.4l8-6.4v16z" fill="white"/>
+                            </svg>
+                            <svg @click="toggleMic" xmlns="http://www.w3.org/2000/svg" viewbox="-10 -10 68 68" :class="open.audio?'on':'off'">
+                                <title>title</title>
+                                <circle cx="24" cy="24" r="34">
+                                    <title>Mute audio</title>
+                                </circle>
+                                <path class="off" transform="scale(0.6), translate(17,18)" d="M38 22h-3.4c0 1.49-.31 2.87-.87 4.1l2.46 2.46C37.33 26.61 38 24.38 38 22zm-8.03.33c0-.11.03-.22.03-.33V10c0-3.32-2.69-6-6-6s-6 2.68-6 6v.37l11.97 11.96zM8.55 6L6 8.55l12.02 12.02v1.44c0 3.31 2.67 6 5.98 6 .45 0 .88-.06 1.3-.15l3.32 3.32c-1.43.66-3 1.03-4.62 1.03-5.52 0-10.6-4.2-10.6-10.2H10c0 6.83 5.44 12.47 12 13.44V42h4v-6.56c1.81-.27 3.53-.9 5.08-1.81L39.45 42 42 39.46 8.55 6z" fill="white"/>
+                                <path class="on" transform="scale(0.6), translate(17,18)"  d="M24 28c3.31 0 5.98-2.69 5.98-6L30 10c0-3.32-2.68-6-6-6-3.31 0-6 2.68-6 6v12c0 3.31 2.69 6 6 6zm10.6-6c0 6-5.07 10.2-10.6 10.2-5.52 0-10.6-4.2-10.6-10.2H10c0 6.83 5.44 12.47 12 13.44V42h4v-6.56c6.56-.97 12-6.61 12-13.44h-3.4z"  fill="white"/>
+                            </svg>
+                        </div>
+                        <div :id="+'_extinfo'" class="extinfo">
+                            <span class="box"></span>
+                            <br/>{{ item.videoId | getSrcTinyId }}
+                            <br/>{{ item.videoId | getOpenId }}
+                        </div>
+                    </div>
+                    <div v-for="item in [0,1,2,3,4,5,6,7,8]" v-if="item >= video_list.length" class="flex-item">
+                        <video  class="video-item" autoplay="autoplay" data-videotype="remote"  ></video>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 主區域  End  -->
+
+        <!-- 右側區域-聊天室 Start -->
+        <div class="sub-panel chatroom chat">
+            <div class="chatting-area">
+                <ul v-for="item in chatList">
+                    <li v-if="item.isSystem" class="receiver-msg">
+                        <div class="msg-wrap">
+                            <p class="from">系统消息:</p>
+                            <p class="msg">{{ item.content }}</p>
+                        </div>
+                    </li>
+                    <li v-else-if="item.isSelfSend" class="sender-msg">
+                        <div class="msg-wrap">
+                            <p class="msg">{{ item.content }}</p>
+                            <p class="from">:我</p>
+                        </div>
+                    </li>
+                    <li v-else class="receiver-msg">
+                        <div class="msg-wrap">
+                            <p class="from">{{ item.who }}:</p>
+                            <p class="msg">{{ item.content }}</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div class="typing-area">
+                <input type="text" class="input-element" v-model="form.msg" placeholder="输入你想要回复的内容">
+                <span v-on:click="handleMsgSend">发送</span>
+            </div>
+        </div>
+        <!-- 右側區域-聊天室  End  -->
+    </div>
+    <!-- 視訊通話區域  End  -->
+</div>
+  <!-- 內容區塊  End  -->
+
+
+
+<vue-toastr ref="toastr"></vue-toastr>
+
+</div>
+<script>
+    function BomQuery(n){
+        var m = window.location.search.match(new RegExp( "(\\?|&)"+n+"=([^&]*)(&|$)"));
+        return !m ? "":decodeURIComponent(m[2]);
+    }
+    const SDKAPPID = BomQuery("sdkappid") || 1400027849;
+    document.write('<script src="https://sxb.qcloud.com/quick/getSpear.php?sdkappid='+SDKAPPID+'"><\/script>');
+</script>
+<script src="assets/libs/store.min.js"></script>
+<script src="assets/libs/lodash.min.js"></script>
+<script src="assets/libs/toastr.min.js"></script>
+<script src="assets/libs/axios.min.js"></script>
+<script src="./WebRTCAPI.min.js"></script>
+<script src="assets/libs/ILiveSDK.js"></script>
+<script src="assets/libs/MediaApi.js"></script>
+<script src="assets/libs/webim.js"></script>
+<script src="assets/js/app.js?v=0313"></script>
+<script src="assets/libs/jquery.min.js"></script>
+<script>
+    setInterval(function(){
+        var videos = $(".video-item");
+        $.each(videos, function(idx,item){
+            $(item).siblings(".extinfo").find(".box").html( "container : "+$(item).width()+"x"+$(item).height()+"<br />"+"video : "+item.videoWidth + "x" + item.videoHeight);
+        });
+    },3000);
+
+</script>
+
+
+<script>
+    var _mtac = {};
+    (function() {
+        var mta = document.createElement("script");
+        mta.src = "https://pingjs.qq.com/h5/stats.js?v2.0.4";
+        mta.setAttribute("name", "MTAH5");
+        mta.setAttribute("sid", "500611043");
+
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(mta, s);
+    })();
+</script>
+</body>
+</html>
